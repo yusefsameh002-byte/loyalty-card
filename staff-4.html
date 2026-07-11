@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة الموظف</title>
+<link rel="manifest" href="manifest-staff.json">
+<meta name="theme-color" content="#132019">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="لوحة الموظف">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#132019;
+    --bg2:#0d1712;
+    --paper:#F8F2E2;
+    --paper-shadow:#d9cfb4;
+    --ink:#a4321f;
+    --ink-dark:#7c2416;
+    --gold:#c99a3d;
+    --teal:#3c7266;
+    --text:#EDE6D6;
+    --text-dim:#a9b3ab;
+    --line:rgba(237,230,214,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(201,154,61,0.10), transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(60,114,102,0.16), transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Cairo',sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:20px 14px 60px;
+  }
+  .brand{
+    text-align:center;
+    margin:10px 0 18px;
+  }
+  .brand .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:.25em;
+    font-size:11px;
+    color:var(--gold);
+    text-transform:uppercase;
+  }
+  .brand h1{
+    margin:6px 0 0;
+    font-size:clamp(24px,6vw,32px);
+    font-weight:900;
+  }
+  .tabs{
+    display:flex;
+    gap:8px;
+    background:var(--bg2);
+    padding:5px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    margin-bottom:22px;
+  }
+  .tab{
+    padding:10px 22px;
+    border-radius:10px;
+    border:none;
+    background:transparent;
+    color:var(--text-dim);
+    font-family:'Cairo',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    transition:.2s;
+  }
+  .tab.active{
+    background:var(--ink);
+    color:#fff;
+  }
+  .panel{width:100%;max-width:420px;display:none;flex-direction:column;align-items:center;gap:16px;}
+  .panel.active{display:flex;}
+
+  .field{width:100%;}
+  .field label{font-size:13px;color:var(--text-dim);display:block;margin-bottom:6px;}
+  .field input{
+    width:100%;
+    padding:13px 14px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:var(--bg2);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:16px;
+    text-align:center;
+    letter-spacing:.05em;
+  }
+  .field input:focus{outline:2px solid var(--gold);}
+  .row{display:flex;gap:10px;width:100%;}
+
+  button.action{
+    flex:1;
+    padding:13px 10px;
+    border-radius:12px;
+    border:none;
+    font-family:'Cairo',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    transition:transform .12s ease;
+  }
+  button.action:active{transform:scale(.96);}
+  button.action:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+  .btn-primary{background:var(--ink);color:#fff;}
+  .btn-secondary{background:transparent;color:var(--text);border:1px solid var(--line) !important;}
+  .btn-gold{background:var(--gold);color:#241a05;}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* punch card */
+  .card{
+    position:relative;
+    width:100%;
+    background:var(--paper);
+    color:#241a05;
+    border-radius:18px;
+    padding:22px 18px 26px;
+    box-shadow:0 18px 30px -12px rgba(0,0,0,.55), 0 0 0 6px var(--paper-shadow) inset;
+  }
+  .card::before, .card::after{
+    content:"";
+    position:absolute;
+    top:50%;
+    width:22px;height:22px;
+    border-radius:50%;
+    background:var(--bg);
+    transform:translateY(-50%);
+  }
+  .card::before{right:-11px;}
+  .card::after{left:-11px;}
+  .card .cust-name{
+    font-weight:800;
+    font-size:17px;
+    text-align:center;
+    margin-bottom:2px;
+  }
+  .card .cust-phone{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    text-align:center;
+    color:#6b5c3d;
+    margin-bottom:16px;
+  }
+  .slots{
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    padding:0 4px;
+  }
+  .slot{
+    flex:1;
+    aspect-ratio:1;
+    border-radius:50%;
+    border:2.5px dashed #b9ac86;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:#a89a72;
+  }
+  .slot .stamp{
+    position:absolute;
+    inset:-4px;
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(255,255,255,.15), transparent 60%),
+      var(--ink);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+    font-weight:900;
+    transform:scale(0) rotate(-18deg);
+    border:2px solid var(--ink-dark);
+  }
+  .slot.filled .stamp{
+    animation: stampDown .38s cubic-bezier(.2,1.6,.4,1) forwards;
+  }
+  @keyframes stampDown{
+    0%{transform:scale(2.1) rotate(-18deg);opacity:0;}
+    60%{transform:scale(.85) rotate(-10deg);opacity:1;}
+    100%{transform:scale(1) rotate(-8deg);opacity:1;}
+  }
+  .card.shake{animation:shake .38s;}
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-4px) rotate(-.5deg);}
+    75%{transform:translateX(4px) rotate(.5deg);}
+  }
+  .progress-note{
+    text-align:center;
+    margin-top:14px;
+    font-size:13px;
+    color:#6b5c3d;
+  }
+  .reward-banner{
+    margin-top:14px;
+    background:var(--gold);
+    color:#241a05;
+    text-align:center;
+    padding:10px;
+    border-radius:10px;
+    font-weight:800;
+    font-size:14px;
+    display:none;
+  }
+  .reward-banner.show{display:block;}
+
+  .qr-box{
+    background:#fff;
+    padding:10px;
+    border-radius:12px;
+  }
+  .hint{font-size:12px;color:var(--text-dim);text-align:center;line-height:1.7;}
+
+  video{width:100%;border-radius:14px;background:#000;}
+  #scanner-wrap{display:none;width:100%;flex-direction:column;gap:10px;align-items:center;}
+  #scanner-wrap.active{display:flex;}
+
+  .status{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    text-align:center;
+    min-height:16px;
+    color:var(--teal);
+  }
+  .status.err{color:#e07a5f;}
+  .footer-note{
+    margin-top:26px;
+    max-width:420px;
+    text-align:center;
+    font-size:11px;
+    color:var(--text-dim);
+    line-height:1.8;
+  }
+</style>
+</head>
+<body>
+
+<div id="lock-screen" style="min-height:100vh;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;position:fixed;inset:0;background:var(--bg);z-index:999;">
+  <div style="font-size:15px;color:var(--text-dim);">لوحة الموظف — أدخل الكود السري</div>
+  <input id="lock-input" type="password" placeholder="الكود" style="width:220px;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:18px;text-align:center;letter-spacing:.15em;">
+  <button id="lock-btn" style="padding:12px 30px;border-radius:12px;border:none;background:var(--ink);color:#fff;font-family:'Cairo',sans-serif;font-weight:700;font-size:15px;cursor:pointer;">دخول</button>
+  <div id="lock-status" style="font-size:12px;color:#e07a5f;min-height:14px;"></div>
+</div>
+
+<div id="app-content" style="display:none;">
+
+
+<div class="brand">
+  <div class="eyebrow">LOYALTY STAMP · ٥ خانات</div>
+  <h1>كارت الولاء الذكي</h1>
+</div>
+
+<div class="tabs">
+  <button class="tab" data-tab="customer">كارت العميل</button>
+  <button class="tab active" data-tab="staff">لوحة الموظف</button>
+</div>
+
+<!-- CUSTOMER PANEL -->
+<div class="panel" id="panel-customer">
+  <div class="field">
+    <label>رقم موبايلك (يستخدم كرقم الكارت)</label>
+    <input type="tel" id="cust-phone" placeholder="01xxxxxxxxx" inputmode="numeric">
+  </div>
+  <div class="row">
+    <button class="action btn-primary" id="cust-load">اعرض كارتي</button>
+    <button class="action btn-secondary" id="cust-new">كارت جديد</button>
+  </div>
+  <div class="status" id="cust-status"></div>
+
+  <div class="card" id="cust-card" style="display:none;">
+    <div class="cust-name" id="cust-card-name">—</div>
+    <div class="cust-phone" id="cust-card-phone">—</div>
+    <div class="slots" id="cust-slots"></div>
+    <div class="progress-note" id="cust-progress"></div>
+    <div class="reward-banner" id="cust-reward">🎁 مبروك! عندك هديه مستحقه — وريها للموظف</div>
+  </div>
+
+  <div class="qr-box" id="cust-qr-box" style="display:none;">
+    <div id="cust-qr"></div>
+  </div>
+  <div class="hint">وري الكود ده للموظف عند كل عملية شراء عشان يسجلها على طول. احفظي الصفحة دي على شاشة موبايلك (إضافة إلى الشاشة الرئيسية) عشان تبقى معاكي دايمًا.</div>
+</div>
+
+<!-- STAFF PANEL -->
+<div class="panel active" id="panel-staff">
+  <div class="field">
+    <label>رقم موبايل العميل</label>
+    <input type="tel" id="staff-phone" placeholder="01xxxxxxxxx" inputmode="numeric">
+  </div>
+  <div class="row">
+    <button class="action btn-primary" id="staff-load">بحث عن العميل</button>
+    <button class="action btn-secondary" id="staff-scan-btn">مسح QR</button>
+  </div>
+
+  <div id="scanner-wrap">
+    <video id="scanner-video" playsinline></video>
+    <button class="action btn-secondary" id="staff-scan-stop">إيقاف الكاميرا</button>
+  </div>
+
+  <div class="status" id="staff-status"></div>
+
+  <div class="card" id="staff-card" style="display:none;">
+    <div class="cust-name" id="staff-card-name">—</div>
+    <div class="cust-phone" id="staff-card-phone">—</div>
+    <div class="slots" id="staff-slots"></div>
+    <div class="progress-note" id="staff-progress"></div>
+    <div class="reward-banner" id="staff-reward">🎁 عنده هديه مستحقه</div>
+  </div>
+
+  <div class="row" id="staff-actions" style="display:none;">
+    <button class="action btn-primary" id="staff-add-stamp">تسجيل عملية شراء ✓</button>
+    <button class="action btn-gold" id="staff-redeem" disabled>استبدال الهديه 🎁</button>
+  </div>
+</div>
+
+<div class="footer-note">
+  الكارت ده متصل دلوقتي بقاعدة بيانات Firebase، يعني أي جهاز يفتح نفس الملف هيشوف نفس البيانات. باقي خطوة واحدة بس: نرفع الملف على استضافة (Netlify مثلاً) عشان ياخد لينك ثابت تقدر تبعته للعملاء والموظفين.
+  <br><br>
+  ملحوظة: قاعدة البيانات شغالة دلوقتي في "وضع الاختبار" وبتقفل الوصول تلقائيًا بعد 30 يوم لأسباب أمان — قبل ما تنتهي المدة هنحتاج نظبط قواعد الأمان عشان يفضل شغال باستمرار.
+</div>
+
+</div>
+
+<script>
+let db = null;
+let firebaseError = null;
+try{
+  const firebaseConfig = {
+    apiKey: "AIzaSyDvSc78iK7kHQBkpOfRJyl9b0btNO4JEZE",
+    authDomain: "shop-loyalty.firebaseapp.com",
+    projectId: "shop-loyalty",
+    storageBucket: "shop-loyalty.firebasestorage.app",
+    messagingSenderId: "998653500925",
+    appId: "1:998653500925:web:163f0075c2b50f22938d94"
+  };
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+}catch(e){
+  firebaseError = e;
+  console.error('Firebase init failed', e);
+}
+const STORE_PREFIX = 'customer:';
+
+function normPhone(p){ return (p||'').trim().replace(/\s+/g,''); }
+
+async function getCustomer(phone){
+  phone = normPhone(phone);
+  if(!phone) return null;
+  if(!db) throw new Error('لا يوجد اتصال بقاعدة البيانات (تأكد من الإنترنت)');
+  const doc = await db.collection('customers').doc(phone).get();
+  return doc.exists ? doc.data() : null;
+}
+async function saveCustomer(cust){
+  if(!db) throw new Error('لا يوجد اتصال بقاعدة البيانات (تأكد من الإنترنت)');
+  await db.collection('customers').doc(cust.phone).set(cust);
+}
+function newCustomer(phone){
+  return { phone: normPhone(phone), name: 'عميل', stamps: 0, rewards: 0, createdAt: Date.now() };
+}
+
+/* ---------- passcode lock ---------- */
+const STAFF_PASSCODE = 'zoofen';
+const lockInput = document.getElementById('lock-input');
+const lockBtn = document.getElementById('lock-btn');
+const lockStatus = document.getElementById('lock-status');
+function tryUnlock(){
+  if(lockInput.value.trim() === STAFF_PASSCODE){
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app-content').style.display = 'flex';
+    document.getElementById('app-content').style.flexDirection = 'column';
+    document.getElementById('app-content').style.alignItems = 'center';
+  }else{
+    lockStatus.textContent = 'الكود غلط، جرب تاني';
+    lockInput.value = '';
+  }
+}
+lockBtn.addEventListener('click', tryUnlock);
+lockInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryUnlock(); });
+
+/* ---------- tabs ---------- */
+if(firebaseError){
+  const bar = document.createElement('div');
+  bar.style.cssText='background:#5c1a12;color:#ffd9cf;padding:10px 16px;border-radius:10px;font-size:13px;text-align:center;margin-bottom:14px;max-width:420px;';
+  bar.textContent = 'تعذر الاتصال بقاعدة البيانات — تأكد إن عندك إنترنت وحدّث الصفحة';
+  document.body.insertBefore(bar, document.querySelector('.tabs'));
+}
+
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    stopScanner();
+  });
+});
+
+/* ---------- render helpers ---------- */
+function renderSlots(container, stamps){
+  container.innerHTML='';
+  for(let i=0;i<5;i++){
+    const slot=document.createElement('div');
+    slot.className='slot'+(i<stamps?' filled':'');
+    if(i<stamps){
+      slot.innerHTML='<div class="stamp">✓</div>';
+    }else{
+      slot.textContent=(i+1);
+    }
+    container.appendChild(slot);
+  }
+}
+
+/* ---------- CUSTOMER VIEW ---------- */
+const custPhoneInput = document.getElementById('cust-phone');
+const custStatus = document.getElementById('cust-status');
+const custCard = document.getElementById('cust-card');
+const custQrBox = document.getElementById('cust-qr-box');
+let custQrRendered = null;
+
+async function showCustomerCard(cust){
+  custCard.style.display='block';
+  document.getElementById('cust-card-name').textContent = cust.name || 'عميل';
+  document.getElementById('cust-card-phone').textContent = cust.phone;
+  renderSlots(document.getElementById('cust-slots'), cust.stamps);
+  const remaining = 5 - cust.stamps;
+  document.getElementById('cust-progress').textContent =
+    cust.stamps>=5 ? 'الكارت مكتمل!' : `باقيلك ${remaining} عمليات شراء للهديه`;
+  document.getElementById('cust-reward').classList.toggle('show', cust.stamps>=5);
+
+  custQrBox.style.display='block';
+  document.getElementById('cust-qr').innerHTML='';
+  new QRCode(document.getElementById('cust-qr'), {
+    text: cust.phone, width:170, height:170,
+    colorDark:'#241a05', colorLight:'#ffffff'
+  });
+}
+
+document.getElementById('cust-load').addEventListener('click', async ()=>{
+  const phone = normPhone(custPhoneInput.value);
+  if(!phone){ custStatus.textContent='اكتب رقم الموبايل الأول'; custStatus.className='status err'; return; }
+  custStatus.textContent='بيدور...'; custStatus.className='status';
+  try{
+    let cust = await getCustomer(phone);
+    if(!cust){
+      custStatus.textContent='مفيش كارت بالرقم ده لسه — دوس "كارت جديد"'; custStatus.className='status err';
+      custCard.style.display='none'; custQrBox.style.display='none';
+      return;
+    }
+    custStatus.textContent='';
+    await showCustomerCard(cust);
+  }catch(e){
+    custStatus.textContent='حصل خطأ: '+e.message; custStatus.className='status err';
+  }
+});
+
+document.getElementById('cust-new').addEventListener('click', async ()=>{
+  const phone = normPhone(custPhoneInput.value);
+  if(!phone){ custStatus.textContent='اكتب رقم الموبايل الأول'; custStatus.className='status err'; return; }
+  custStatus.textContent='بيتعمل...'; custStatus.className='status';
+  try{
+    let cust = await getCustomer(phone);
+    if(cust){ custStatus.textContent='الرقم ده عنده كارت بالفعل'; custStatus.className='status err'; await showCustomerCard(cust); return; }
+    cust = newCustomer(phone);
+    await saveCustomer(cust);
+    custStatus.textContent='تم عمل كارت جديد ✓'; custStatus.className='status';
+    await showCustomerCard(cust);
+  }catch(e){
+    custStatus.textContent='حصل خطأ: '+e.message; custStatus.className='status err';
+  }
+});
+
+/* ---------- STAFF VIEW ---------- */
+const staffPhoneInput = document.getElementById('staff-phone');
+const staffStatus = document.getElementById('staff-status');
+const staffCard = document.getElementById('staff-card');
+const staffActions = document.getElementById('staff-actions');
+let currentStaffCustomer = null;
+
+async function loadStaffCustomer(phone){
+  phone = normPhone(phone);
+  if(!phone){ staffStatus.textContent='اكتب أو امسح رقم العميل'; staffStatus.className='status err'; return; }
+  staffStatus.textContent='بيدور...'; staffStatus.className='status';
+  let cust = await getCustomer(phone);
+  if(!cust){
+    cust = newCustomer(phone);
+    await saveCustomer(cust);
+    staffStatus.textContent='عميل جديد — اتعمله كارت'; staffStatus.className='status';
+  } else {
+    staffStatus.textContent='';
+  }
+  currentStaffCustomer = cust;
+  staffPhoneInput.value = phone;
+  renderStaffCard();
+}
+
+function renderStaffCard(){
+  const cust = currentStaffCustomer;
+  staffCard.style.display='block';
+  staffActions.style.display='flex';
+  document.getElementById('staff-card-name').textContent = cust.name || 'عميل';
+  document.getElementById('staff-card-phone').textContent = cust.phone;
+  renderSlots(document.getElementById('staff-slots'), cust.stamps);
+  const remaining = 5 - cust.stamps;
+  document.getElementById('staff-progress').textContent =
+    cust.stamps>=5 ? 'الكارت مكتمل!' : `باقيله ${remaining} عمليات شراء للهديه`;
+  document.getElementById('staff-reward').classList.toggle('show', cust.stamps>=5);
+  document.getElementById('staff-add-stamp').disabled = cust.stamps>=5;
+  document.getElementById('staff-redeem').disabled = cust.stamps<5;
+}
+
+document.getElementById('staff-load').addEventListener('click', ()=> loadStaffCustomer(staffPhoneInput.value));
+
+document.getElementById('staff-add-stamp').addEventListener('click', async ()=>{
+  if(!currentStaffCustomer) return;
+  currentStaffCustomer.stamps = Math.min(5, currentStaffCustomer.stamps+1);
+  await saveCustomer(currentStaffCustomer);
+  renderStaffCard();
+  staffCard.classList.remove('shake'); void staffCard.offsetWidth; staffCard.classList.add('shake');
+  staffStatus.textContent = currentStaffCustomer.stamps>=5 ? 'وصل للهديه! 🎁' : 'اتسجلت عملية الشراء ✓';
+  staffStatus.className='status';
+});
+
+document.getElementById('staff-redeem').addEventListener('click', async ()=>{
+  if(!currentStaffCustomer || currentStaffCustomer.stamps<5) return;
+  currentStaffCustomer.stamps = 0;
+  currentStaffCustomer.rewards = (currentStaffCustomer.rewards||0)+1;
+  await saveCustomer(currentStaffCustomer);
+  renderStaffCard();
+  staffStatus.textContent='تم استبدال الهديه — الكارت اتصفر ✓'; staffStatus.className='status';
+});
+
+/* ---------- QR scanning (staff) ---------- */
+const scannerWrap = document.getElementById('scanner-wrap');
+const scannerVideo = document.getElementById('scanner-video');
+let scanStream=null, scanRAF=null;
+const scanCanvas = document.createElement('canvas');
+const scanCtx = scanCanvas.getContext('2d');
+
+async function startScanner(){
+  try{
+    scanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
+    scannerVideo.srcObject = scanStream;
+    await scannerVideo.play();
+    scannerWrap.classList.add('active');
+    tickScanner();
+  }catch(e){
+    staffStatus.textContent='مفيش صلاحية وصول للكاميرا'; staffStatus.className='status err';
+  }
+}
+function tickScanner(){
+  if(scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA){
+    scanCanvas.width = scannerVideo.videoWidth;
+    scanCanvas.height = scannerVideo.videoHeight;
+    scanCtx.drawImage(scannerVideo,0,0,scanCanvas.width,scanCanvas.height);
+    const imgData = scanCtx.getImageData(0,0,scanCanvas.width,scanCanvas.height);
+    const code = jsQR(imgData.data, imgData.width, imgData.height);
+    if(code && code.data){
+      stopScanner();
+      loadStaffCustomer(code.data);
+      return;
+    }
+  }
+  scanRAF = requestAnimationFrame(tickScanner);
+}
+function stopScanner(){
+  if(scanRAF) cancelAnimationFrame(scanRAF);
+  if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+  scannerWrap.classList.remove('active');
+}
+document.getElementById('staff-scan-btn').addEventListener('click', startScanner);
+document.getElementById('staff-scan-stop').addEventListener('click', stopScanner);
+</script>
+</body>
+</html>
