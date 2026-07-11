@@ -264,11 +264,6 @@
   <h1>كارت الولاء الذكي</h1>
 </div>
 
-<div class="tabs">
-  <button class="tab active" data-tab="customer">كارت العميل</button>
-  <button class="tab" data-tab="staff">لوحة الموظف</button>
-</div>
-
 <!-- CUSTOMER PANEL -->
 <div class="panel active" id="panel-customer">
   <div class="field">
@@ -293,38 +288,6 @@
     <div id="cust-qr"></div>
   </div>
   <div class="hint">وري الكود ده للموظف عند كل عملية شراء عشان يسجلها على طول. احفظي الصفحة دي على شاشة موبايلك (إضافة إلى الشاشة الرئيسية) عشان تبقى معاكي دايمًا.</div>
-</div>
-
-<!-- STAFF PANEL -->
-<div class="panel" id="panel-staff">
-  <div class="field">
-    <label>رقم موبايل العميل</label>
-    <input type="tel" id="staff-phone" placeholder="01xxxxxxxxx" inputmode="numeric">
-  </div>
-  <div class="row">
-    <button class="action btn-primary" id="staff-load">بحث عن العميل</button>
-    <button class="action btn-secondary" id="staff-scan-btn">مسح QR</button>
-  </div>
-
-  <div id="scanner-wrap">
-    <video id="scanner-video" playsinline></video>
-    <button class="action btn-secondary" id="staff-scan-stop">إيقاف الكاميرا</button>
-  </div>
-
-  <div class="status" id="staff-status"></div>
-
-  <div class="card" id="staff-card" style="display:none;">
-    <div class="cust-name" id="staff-card-name">—</div>
-    <div class="cust-phone" id="staff-card-phone">—</div>
-    <div class="slots" id="staff-slots"></div>
-    <div class="progress-note" id="staff-progress"></div>
-    <div class="reward-banner" id="staff-reward">🎁 عنده هديه مستحقه</div>
-  </div>
-
-  <div class="row" id="staff-actions" style="display:none;">
-    <button class="action btn-primary" id="staff-add-stamp">تسجيل عملية شراء ✓</button>
-    <button class="action btn-gold" id="staff-redeem" disabled>استبدال الهديه 🎁</button>
-  </div>
 </div>
 
 <div class="footer-note">
@@ -462,106 +425,4 @@ document.getElementById('cust-new').addEventListener('click', async ()=>{
   }
 });
 
-/* ---------- STAFF VIEW ---------- */
-const staffPhoneInput = document.getElementById('staff-phone');
-const staffStatus = document.getElementById('staff-status');
-const staffCard = document.getElementById('staff-card');
-const staffActions = document.getElementById('staff-actions');
-let currentStaffCustomer = null;
-
-async function loadStaffCustomer(phone){
-  phone = normPhone(phone);
-  if(!phone){ staffStatus.textContent='اكتب أو امسح رقم العميل'; staffStatus.className='status err'; return; }
-  staffStatus.textContent='بيدور...'; staffStatus.className='status';
-  let cust = await getCustomer(phone);
-  if(!cust){
-    cust = newCustomer(phone);
-    await saveCustomer(cust);
-    staffStatus.textContent='عميل جديد — اتعمله كارت'; staffStatus.className='status';
-  } else {
-    staffStatus.textContent='';
-  }
-  currentStaffCustomer = cust;
-  staffPhoneInput.value = phone;
-  renderStaffCard();
-}
-
-function renderStaffCard(){
-  const cust = currentStaffCustomer;
-  staffCard.style.display='block';
-  staffActions.style.display='flex';
-  document.getElementById('staff-card-name').textContent = cust.name || 'عميل';
-  document.getElementById('staff-card-phone').textContent = cust.phone;
-  renderSlots(document.getElementById('staff-slots'), cust.stamps);
-  const remaining = 5 - cust.stamps;
-  document.getElementById('staff-progress').textContent =
-    cust.stamps>=5 ? 'الكارت مكتمل!' : `باقيله ${remaining} عمليات شراء للهديه`;
-  document.getElementById('staff-reward').classList.toggle('show', cust.stamps>=5);
-  document.getElementById('staff-add-stamp').disabled = cust.stamps>=5;
-  document.getElementById('staff-redeem').disabled = cust.stamps<5;
-}
-
-document.getElementById('staff-load').addEventListener('click', ()=> loadStaffCustomer(staffPhoneInput.value));
-
-document.getElementById('staff-add-stamp').addEventListener('click', async ()=>{
-  if(!currentStaffCustomer) return;
-  currentStaffCustomer.stamps = Math.min(5, currentStaffCustomer.stamps+1);
-  await saveCustomer(currentStaffCustomer);
-  renderStaffCard();
-  staffCard.classList.remove('shake'); void staffCard.offsetWidth; staffCard.classList.add('shake');
-  staffStatus.textContent = currentStaffCustomer.stamps>=5 ? 'وصل للهديه! 🎁' : 'اتسجلت عملية الشراء ✓';
-  staffStatus.className='status';
-});
-
-document.getElementById('staff-redeem').addEventListener('click', async ()=>{
-  if(!currentStaffCustomer || currentStaffCustomer.stamps<5) return;
-  currentStaffCustomer.stamps = 0;
-  currentStaffCustomer.rewards = (currentStaffCustomer.rewards||0)+1;
-  await saveCustomer(currentStaffCustomer);
-  renderStaffCard();
-  staffStatus.textContent='تم استبدال الهديه — الكارت اتصفر ✓'; staffStatus.className='status';
-});
-
-/* ---------- QR scanning (staff) ---------- */
-const scannerWrap = document.getElementById('scanner-wrap');
-const scannerVideo = document.getElementById('scanner-video');
-let scanStream=null, scanRAF=null;
-const scanCanvas = document.createElement('canvas');
-const scanCtx = scanCanvas.getContext('2d');
-
-async function startScanner(){
-  try{
-    scanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
-    scannerVideo.srcObject = scanStream;
-    await scannerVideo.play();
-    scannerWrap.classList.add('active');
-    tickScanner();
-  }catch(e){
-    staffStatus.textContent='مفيش صلاحية وصول للكاميرا'; staffStatus.className='status err';
-  }
-}
-function tickScanner(){
-  if(scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA){
-    scanCanvas.width = scannerVideo.videoWidth;
-    scanCanvas.height = scannerVideo.videoHeight;
-    scanCtx.drawImage(scannerVideo,0,0,scanCanvas.width,scanCanvas.height);
-    const imgData = scanCtx.getImageData(0,0,scanCanvas.width,scanCanvas.height);
-    const code = jsQR(imgData.data, imgData.width, imgData.height);
-    if(code && code.data){
-      stopScanner();
-      loadStaffCustomer(code.data);
-      return;
-    }
-  }
-  scanRAF = requestAnimationFrame(tickScanner);
-}
-function stopScanner(){
-  if(scanRAF) cancelAnimationFrame(scanRAF);
-  if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
-  scannerWrap.classList.remove('active');
-}
-document.getElementById('staff-scan-btn').addEventListener('click', startScanner);
-document.getElementById('staff-scan-stop').addEventListener('click', stopScanner);
-</script>
-</body>
-</html>
+</script></body></html>
